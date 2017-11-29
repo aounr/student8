@@ -12,6 +12,8 @@ using Microsoft.Extensions.Options;
 using student8.Models;
 using student8.Models.AccountViewModels;
 using student8.Services;
+using Microsoft.Xrm.Sdk;
+
 
 namespace student8.Controllers
 {
@@ -23,7 +25,10 @@ namespace student8.Controllers
         private readonly IEmailSender _emailSender;
         private readonly ISmsSender _smsSender;
         private readonly ILogger _logger;
+        private readonly IOrganizationService _orgService;
         private readonly string _externalCookieScheme;
+        
+   
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
@@ -39,6 +44,8 @@ namespace student8.Controllers
             _emailSender = emailSender;
             _smsSender = smsSender;
             _logger = loggerFactory.CreateLogger<AccountController>();
+            _orgService = CRM.CrmService.GetServiceProvider();
+
         }
 
         //
@@ -112,7 +119,7 @@ namespace student8.Controllers
             ViewData["ReturnUrl"] = returnUrl;
             if (ModelState.IsValid)
             {
-                var user = new ApplicationUser { UserName = model.Email, Email = model.Email };
+                var user = new ApplicationUser { UserName = model.Email, Email = model.Email, FirstName = model.FirstName, LastName = model.LastName };
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {
@@ -124,6 +131,14 @@ namespace student8.Controllers
                     //    $"Please confirm your account by clicking this link: <a href='{callbackUrl}'>link</a>");
                     await _signInManager.SignInAsync(user, isPersistent: false);
                     _logger.LogInformation(3, "User created a new account with password.");
+                    var Contact = new Entity("contact");
+                    Contact["firstname"] = user.FirstName;
+                    Contact["lastname"] = user.LastName;
+                    Contact["emailaddress1"] = user.Email;
+                    Contact.Id = Guid.Parse(user.Id);
+
+                    _orgService.Create(Contact);
+
                     return RedirectToLocal(returnUrl);
                 }
                 AddErrors(result);
@@ -194,7 +209,7 @@ namespace student8.Controllers
                 // If the user does not have an account, then ask the user to create an account.
                 ViewData["ReturnUrl"] = returnUrl;
                 ViewData["LoginProvider"] = info.LoginProvider;
-                var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+                var email = info.Principal.FindFirstValue(System.IdentityModel.Claims.ClaimTypes.Email);
                 return View("ExternalLoginConfirmation", new ExternalLoginConfirmationViewModel { Email = email });
             }
         }
